@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Event Planning - BET</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="navbar">
+    <div class="logo">
+        <span class="bet">BET</span>
+        <span class="title">Budget Entry Tool</span>
+    </div>
+</header>
+
+<h2 class="page-title">Event & Budget Planning</h2>
+<p class="subtitle" style="text-align:center;">Select your event to begin planning</p>
+
+<div class="event-container">
+    <div class="card" onclick="selectEvent('Freshers Party')">
+        <i class="fa-solid fa-wand-sparkles fa-3x"></i>
+        <p>Fresher's Party</p>
+    </div>
+    <div class="card" onclick="selectEvent('Alumni Meet')">
+        <i class="fa-solid fa-graduation-cap fa-3x"></i>
+        <p>Alumni Meet</p>
+    </div>
+    <div class="card" onclick="selectEvent('Sports Day')">
+        <i class="fa-solid fa-football fa-3x"></i>
+        <p>Sports Day</p>
+    </div>
+    <div class="card" onclick="selectEvent('Tech Fest')">
+        <i class="fa-solid fa-microchip fa-3x"></i>
+        <p>Tech Fest</p>
+    </div>
+    <div class="card" onclick="selectEvent('Cultural Evening')">
+        <i class="fa-solid fa-masks-theater fa-3x"></i>
+        <p>Cultural Evening</p>
+    </div>
+    <div class="card" onclick="selectEvent('Entrepreneur Summit')">
+        <i class="fa-solid fa-briefcase fa-3x"></i>
+        <p>Entrepreneur's Summit</p>
+    </div>
+</div>
+
+<div class="attendees-box">
+    <label>No. of Attendees</label>
+    <input type="number" id="attendees" placeholder="Enter number">
+    <button id="nextBtn" onclick="goDashboard()" style="display:none; margin-top:10px;">Next</button>
+</div>
+
+<script>
+    let selectedEvent = "";
+    const input = document.getElementById("attendees");
+    const button = document.getElementById("nextBtn");
+
+    function selectEvent(name) {
+        selectedEvent = name;
+        document.querySelectorAll('.card').forEach(c => c.classList.remove('active-card'));
+        event.currentTarget.classList.add('active-card');
+        checkNext();
+    }
+
+    input.addEventListener("input", checkNext);
+
+    function checkNext() {
+        if (input.value > 0 && selectedEvent !== "") {
+            button.style.display = "block";
+        } else {
+            button.style.display = "none";
+        }
+    }
+
+    function goDashboard() {
+        localStorage.setItem("selectedEvent", selectedEvent);
+        localStorage.setItem("attendees", input.value);
+        window.location.href = "dashboard.html";
+    }
+</script>
+</body>
+</html>

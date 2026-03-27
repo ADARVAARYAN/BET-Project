@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Budget Dashboard - BET Pro</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* DASHBOARD SPECIFIC STYLES */
+        .progress-container { width: 100%; background: #eee; height: 12px; border-radius: 10px; margin: 15px 0; overflow: hidden; border: 1px solid #ddd; display: none; }
+        #progressBar { height: 100%; width: 0%; background: #0ea5a4; transition: width 0.5s ease-in-out; }
+        
+        .custom-box { border-top: 2px dashed #eee; margin-top: 20px; padding-top: 15px; background: #f9fafb; padding: 15px; border-radius: 12px; }
+        .custom-box input { margin-bottom: 8px; width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd; box-sizing: border-box; }
+        
+        .search-container { margin-bottom: 20px; width: 100%; }
+        #itemSearch { width: 100%; padding: 12px 20px; border-radius: 25px; border: 2px solid #0ea5a4; outline: none; box-sizing: border-box; font-size: 1rem; }
+
+        .over-budget { color: #d32f2f !important; animation: shake 0.5s; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+
+        .btn-action { background: #0ea5a4; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
+        .btn-action:hover { background: #1e3a8a; }
+
+        @media print { .navbar, .action-btns, .right input, .custom-box, .search-container, .limit-section { display: none !important; } }
+    </style>
+</head>
+<body>
+
+<header class="navbar">
+    <div class="logo"><span class="bet">BET</span><span class="title">Budget Entry Tool</span></div>
+    <div class="action-btns" style="display:flex; gap:10px;">
+        <button onclick="resetForm()" style="background:#666; color:white; border:none; padding:8px 15px; border-radius:20px; cursor:pointer;">Reset All</button>
+        <button onclick="window.print()" style="background:#1e3a8a; color:white; border:none; padding:8px 15px; border-radius:20px; cursor:pointer;">Save PDF</button>
+    </div>
+</header>
+
+<div class="selected-event" style="text-align:center; background:#1e3a8a; color:white; padding:10px; margin:20px auto; max-width:300px; border-radius:30px;">
+    <h3 id="eventTitle" style="margin:0;"></h3>
+</div>
+
+<div class="main-container" style="display:flex; gap:30px; padding:20px 50px;">
+    <div style="flex:2;">
+        <div class="search-container">
+            <input type="text" id="itemSearch" placeholder="🔍 Search items (DJ, Food, Stage...)" onkeyup="filterItems()">
+        </div>
+        <div class="items" id="itemsContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 15px;"></div>
+    </div>
+    
+    <div class="right" style="flex:1; background:white; padding:20px; border-radius:15px; box-shadow:0 4px 15px rgba(0,0,0,0.05); height:fit-content;">
+        <div class="limit-section" style="background:#f0f7ff; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #0ea5a4;">
+            <label style="color:#1e3a8a; font-size:0.8rem; font-weight:bold;">BUDGET LIMIT (OPTIONAL)</label>
+            <input type="number" id="budgetLimit" placeholder="Enter limit" oninput="calculate()" style="width:100%; border:none; background:transparent; font-size:1.1rem; font-weight:bold; color:#1e3a8a; outline:none;">
+        </div>
+
+        <h3>Attendee Details</h3>
+        <label>Veg (₹250)</label>
+        <input type="number" id="veg" value="0" oninput="calculate()" style="width:100%; padding:8px; margin-bottom:10px;">
+        <label>Non-Veg (₹350)</label>
+        <input type="number" id="nonveg" value="0" oninput="calculate()" style="width:100%; padding:8px; margin-bottom:10px;">
+
+        <div class="total-box" style="margin-top:20px; border-top:1px solid #eee; padding-top:15px;">
+            <p id="vegCost">Veg Total: ₹0</p>
+            <p id="nonvegCost">Non-Veg Total: ₹0</p>
+            <div class="progress-container"><div id="progressBar"></div></div>
+            <h2 id="grandTotal" style="margin:10px 0; color:#0ea5a4;">Total: ₹0</h2>
+            <p id="budgetStatus" style="font-weight:bold; font-size:0.8rem;"></p>
+        </div>
+
+        <div class="custom-box">
+            <h4><i class="fa-solid fa-plus-circle"></i> Add Custom Item</h4>
+            <input type="text" id="customName" placeholder="Item Name">
+            <input type="number" id="customCost" placeholder="Cost (₹)">
+            <button class="btn-action" onclick="addCustomItem()">Add to Budget</button>
+        </div>
+    </div>
+</div>
+
+<div style="height: 300px; margin: 40px auto; max-width: 450px;"><canvas id="budgetChart"></canvas></div>
+
+<script>
+let chart;
+let eventName = localStorage.getItem("selectedEvent") || "General Event";
+document.getElementById("eventTitle").innerText = eventName;
+
+const defaultItems = {
+    "Freshers Party": [
+        {name:"DJ", cost:12000}, {name:"Main Stage", cost:15000}, {name:"LED Wall", cost:20000}, {name:"Laser Lights", cost:8000},
+        {name:"Welcome Drinks", cost:5000}, {name:"Balloons", cost:2000}, {name:"Photo Booth", cost:6000}, {name:"Anchor", cost:5000},
+        {name:"Security", cost:4000}, {name:"Dance Floor", cost:10000}, {name:"Cake", cost:3000}, {name:"Red Carpet", cost:2500},
+        {name:"Invitations", cost:1500}, {name:"Gifts", cost:7000}, {name:"Cleanup", cost:2000}
+    ],
+    "Alumni Meet": [
+        {name:"Grand Stage", cost:18000}, {name:"A/V Setup", cost:12000}, {name:"Mementos", cost:15000}, {name:"Photography", cost:7000},
+        {name:"Registration Kit", cost:6000}, {name:"Bouquets", cost:3000}, {name:"Seating", cost:12000}, {name:"Backdrop", cost:5000},
+        {name:"Lighting", cost:9000}, {name:"Live Music", cost:15000}, {name:"Badges", cost:2000}, {name:"Videography", cost:8000},
+        {name:"Valet Parking", cost:4000}, {name:"Souvenirs", cost:10000}, {name:"Hospitality", cost:5000}
+    ],
+    "Sports Day": [
+        {name:"Equipment", cost:15000}, {name:"Medals", cost:8000}, {name:"Trophies", cost:12000}, {name:"Ground Work", cost:10000},
+        {name:"Refreshments", cost:7000}, {name:"Sound PA", cost:5000}, {name:"First Aid", cost:3000}, {name:"Jerseys", cost:14000},
+        {name:"Referees", cost:6000}, {name:"Marquee Tents", cost:9000}, {name:"Water Dispenser", cost:2500}, {name:"Certificates", cost:2000},
+        {name:"Banners", cost:3500}, {name:"Scoreboard", cost:4000}, {name:"Volunteers", cost:3000}
+    ],
+    "Tech Fest": [
+        {name:"WiFi", cost:10000}, {name:"Server", cost:15000}, {name:"Prizes", cost:30000}, {name:"Projectors", cost:12000},
+        {name:"Tech Kit", cost:8000}, {name:"Workshops", cost:15000}, {name:"Speakers", cost:20000}, {name:"Ads", cost:5000},
+        {name:"ID Cards", cost:2500}, {name:"Power Boards", cost:2000}, {name:"T-Shirts", cost:12000}, {name:"Cables", cost:1500},
+        {name:"Lab Setup", cost:9000}, {name:"Certificates", cost:3000}, {name:"Snack Box", cost:6000}
+    ],
+    "Cultural Evening": [
+        {name:"Sound", cost:18000}, {name:"Folk Band", cost:25000}, {name:"Lighting", cost:12000}, {name:"Trad Decor", cost:9000},
+        {name:"Choreographer", cost:8000}, {name:"Makeup", cost:6000}, {name:"Costumes", cost:15000}, {name:"Video Screen", cost:10000},
+        {name:"Anchoring", cost:6000}, {name:"Security", cost:5000}, {name:"Photography", cost:7000}, {name:"Awards", cost:8000},
+        {name:"Cleaning", cost:2000}, {name:"Invites", cost:3000}, {name:"Crew", cost:4000}
+    ],
+    "Entrepreneur Summit": [
+        {name:"Keynote", cost:30000}, {name:"Decor", cost:15000}, {name:"Marketing", cost:12000}, {name:"Kits", cost:10000},
+        {name:"Lanyards", cost:3000}, {name:"Lunch", cost:25000}, {name:"Press Release", cost:6000}, {name:"Pitch Screen", cost:8000},
+        {name:"Mentors", cost:15000}, {name:"Photography", cost:7000}, {name:"Recording", cost:9000}, {name:"Awards", cost:7000},
+        {name:"Coffee", cost:4000}, {name:"Registration", cost:3000}, {name:"Admin", cost:5000}
+    ]
+};
+
+let allEventItems = JSON.parse(localStorage.getItem("proBudgetData")) || defaultItems;
+
+function getIcon(name) {
+    const n = name.toLowerCase();
+    if(n.includes("food") || n.includes("drinks") || n.includes("lunch")) return "fa-utensils";
+    if(n.includes("dj") || n.includes("sound") || n.includes("music")) return "fa-headphones";
+    if(n.includes("stage") || n.includes("decor") || n.includes("lighting")) return "fa-wand-magic-sparkles";
+    if(n.includes("photo") || n.includes("video")) return "fa-camera";
+    if(n.includes("wifi") || n.includes("tech") || n.includes("server")) return "fa-microchip";
+    if(n.includes("prize") || n.includes("award") || n.includes("gift") || n.includes("trophy")) return "fa-trophy";
+    if(n.includes("security")) return "fa-shield-halved";
+    return "fa-tag"; 
+}
+
+function loadItems() {
+    let container = document.getElementById("itemsContainer");
+    let items = allEventItems[eventName] || [];
+    container.innerHTML = "";
+    let total = 0;
+    items.forEach(item => {
+        total += item.cost;
+        container.innerHTML += `<div class="item-card" style="background:white; padding:15px; border-radius:10px; border:1px solid #0ea5a4; text-align:center;"><i class="fa-solid ${getIcon(item.name)} fa-2x" style="color:#0ea5a4; margin-bottom:10px;"></i><p style="font-size:0.8rem; font-weight:bold; margin:5px 0;">${item.name}</p><span>₹${item.cost.toLocaleString("en-IN")}</span></div>`;
+    });
+    return total;
+}
+
+function calculate() {
+    let veg = parseInt(document.getElementById("veg").value) || 0;
+    let nonveg = parseInt(document.getElementById("nonveg").value) || 0;
+    let limitInput = document.getElementById("budgetLimit").value;
+    let limit = parseInt(limitInput);
+    
+    let vTotal = veg * 250;
+    let nvTotal = nonveg * 350;
+    let iTotal = loadItems();
+    let grand = vTotal + nvTotal + iTotal;
+
+    const grandTotalEl = document.getElementById("grandTotal");
+    const status = document.getElementById("budgetStatus");
+    const barContainer = document.querySelector(".progress-container");
+    const bar = document.getElementById("progressBar");
+
+    document.getElementById("vegCost").innerText = `Veg Total: ₹${vTotal.toLocaleString()}`;
+    document.getElementById("nonvegCost").innerText = `Non-Veg Total: ₹${nvTotal.toLocaleString()}`;
+    grandTotalEl.innerText = `Total: ₹${grand.toLocaleString()}`;
+    
+    if (!limitInput || limit <= 0) {
+        barContainer.style.display = "none";
+        status.innerText = "";
+        grandTotalEl.classList.remove("over-budget");
+    } else {
+        barContainer.style.display = "block";
+        let percent = (grand / limit) * 100;
+        bar.style.width = Math.min(percent, 100) + "%";
+        if (grand > limit) {
+            bar.style.background = "#d32f2f";
+            grandTotalEl.classList.add("over-budget");
+            status.innerText = `⚠️ Over by ₹${(grand - limit).toLocaleString()}`;
+            status.style.color = "#d32f2f";
+        } else {
+            bar.style.background = "#0ea5a4";
+            grandTotalEl.classList.remove("over-budget");
+            status.innerText = `✅ ₹${(limit - grand).toLocaleString()} left`;
+            status.style.color = "#2e7d32";
+        }
+    }
+    updateChart(vTotal, nvTotal, iTotal);
+}
+
+function addCustomItem() {
+    let name = document.getElementById("customName").value;
+    let cost = parseInt(document.getElementById("customCost").value);
+    if (name && cost) {
+        if (!allEventItems[eventName]) allEventItems[eventName] = [];
+        allEventItems[eventName].push({name: name, cost: cost});
+        localStorage.setItem("proBudgetData", JSON.stringify(allEventItems));
+        calculate();
+        document.getElementById("customName").value = "";
+        document.getElementById("customCost").value = "";
+    }
+}
+
+function filterItems() {
+    let input = document.getElementById('itemSearch').value.toLowerCase();
+    let cards = document.getElementsByClassName('item-card');
+    for (let card of cards) {
+        let name = card.getElementsByTagName('p')[0].innerText.toLowerCase();
+        card.style.display = name.includes(input) ? "block" : "none";
+    }
+}
+
+function resetForm() {
+    if(confirm("Reset all custom items?")) {
+        localStorage.removeItem("proBudgetData");
+        location.reload();
+    }
+}
+
+function updateChart(v, nv, i) {
+    let ctx = document.getElementById("budgetChart").getContext('2d');
+    if (chart) chart.destroy();
+    chart = new Chart(ctx, {
+        type: "pie",
+        data: { labels: ["Veg", "Non-Veg", "Items"], datasets: [{ data: [v, nv, i], backgroundColor: ["#0ea5a4", "#1e3a8a", "#f59e0b"] }] },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+}
+calculate();
+</script>
+</body>
+</html>
